@@ -1,0 +1,28 @@
+<?php
+/**
+ * ПРИМЕР локального конфига проекта.
+ * Переименуйте этот файл в app_config.php и заполните своими данными.
+ * ЭТОТ ФАЙЛ БЕЗОПАСЕН ДЛЯ ГИТХАБА.
+ */
+return [
+    'google_sheet_id' => 'ВАШ_ID_ТАБЛИЦЫ_ИЗ_URL',
+    'main_sheet_gid' => 'GID_ГЛАВНОГО_ЛИСТА',
+    'reattestation_gid' => 'GID_ЛИСТА_ПЕРЕАТТЕСТАЦИИ',
+
+    // URL Web App из Google Apps Script (после деплоя).
+    'app_script_webhook_url' => 'https://script.google.com/macros/s/.../exec',
+
+    // Секретный токен для проверки подлинности запросов.
+    'app_script_webhook_token' => 'ВАШ_СЕКРЕТНЫЙ_ТОКЕН',
+
+    // Токен Discord Бота (для получения аватарок и т.д.)
+    'bot_api_token' => 'ВАШ_ТОКЕН_БОТА',
+
+    // === Вход через Discord (OAuth2) ===
+    // Из Discord Developer Portal → ваше приложение → OAuth2.
+    'discord_client_id' => 'ВАШ_CLIENT_ID',
+    'discord_client_secret' => 'ВАШ_CLIENT_SECRET',
+    // Должен ТОЧНО совпадать с Redirect URI, добавленным в настройках OAuth2 приложения.
+    // Например: https://ваш-домен.up.railway.app/discord_login.php
+    'discord_redirect_uri' => 'https://ваш-домен/discord_login.php',
+];

@@ -1,0 +1,12 @@
+node_modules
+npm-debug.log
+.git
+.gitignore
+.DS_Store
+terminals
+agent-transcripts
+app_config.php
+bot_config.json
+users.json
+cache/
+uploads/

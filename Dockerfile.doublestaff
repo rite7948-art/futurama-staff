@@ -1,0 +1,10 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package.json package-lock.json* ./
+RUN npm install --omit=dev
+
+COPY doublestaff_checker.js ./
+
+CMD ["node", "doublestaff_checker.js"]

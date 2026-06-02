@@ -1,0 +1,28 @@
+# Системные файлы
+.DS_Store
+Thumbs.db
+
+# Конфигурации и секреты (ВАЖНО!)
+app_config.php
+bot_config.json
+.env
+users.json
+# Папки зависимостей
+
+# Папки зависимостей
+node_modules/
+vendor/
+
+# Кэш и логи
+cache/
+*.log
+npm-debug.log*
+
+# Временные папки IDE
+.idea/
+.vscode/
+.gemini/
+
+# База данных (если используется локальный файл)
+*.db
+*.sqlite

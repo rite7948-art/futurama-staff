@@ -1,0 +1,30 @@
+{
+    "spin_speed": 5,
+    "options": [
+        {
+            "name": "60с",
+            "weight": 50,
+            "color": "#6366f1"
+        },
+        {
+            "name": "10m",
+            "weight": 50,
+            "color": "#8b5cf6"
+        },
+        {
+            "name": "1h",
+            "weight": 50,
+            "color": "#ec4899"
+        },
+        {
+            "name": "1d",
+            "weight": 50,
+            "color": "#ef4444"
+        },
+        {
+            "name": "1w",
+            "weight": 50,
+            "color": "#f59e0b"
+        }
+    ]
+}
