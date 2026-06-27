@@ -134,8 +134,11 @@ function getAllDashboardData($pdo)
             $db_username = $userData['username'] ?? null;
 
             $curr_shift = isset($row[19]) ? trim((string) $row[19]) : '';
-            if ($curr_shift !== '')
+            // Принимаем только валидные shift-значения: "all", цифру, диапазон вида "1-3" или "10-12".
+            // Заголовки типа "Futurama High Support", "Курирующий состав" игнорируем.
+            if ($curr_shift !== '' && preg_match('/^(all|\d+(\s*[-\/]\s*\d+)?)$/iu', $curr_shift)) {
                 $lastSeenShift = $curr_shift;
+            }
 
             if ($nickname !== '' && $role_text !== '' && $nickname !== 'Никнейм') {
                 $role_l = mb_strtolower($role_text);
