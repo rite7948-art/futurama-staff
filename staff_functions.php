@@ -4,9 +4,15 @@
 function configValue($envName, $configKey, $default = '')
 {
     $appConfig = getAppConfig();
-    $env = getenv($envName);
-    if ($env !== false && trim((string) $env) !== '')
-        return trim((string) $env);
+    // Пробуем env-переменную в исходном написании, потом upper/lower (Railway часто заводит lowercase).
+    $candidates = array_unique([$envName, strtoupper((string)$envName), strtolower((string)$envName), $configKey]);
+    foreach ($candidates as $name) {
+        if ($name === '' || $name === null) continue;
+        $env = getenv($name);
+        if ($env !== false && trim((string) $env) !== '') {
+            return trim((string) $env);
+        }
+    }
     return trim((string) ($appConfig[$configKey] ?? $default));
 }
 

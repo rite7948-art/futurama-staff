@@ -87,11 +87,29 @@ try {
         )");
     } catch (Exception $e) {}
 
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS reports (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            master_name VARCHAR(100) NOT NULL,
+            candidate_id VARCHAR(50) NOT NULL,
+            invited TINYINT(1) DEFAULT 0,
+            screenshot_path VARCHAR(255) NOT NULL,
+            comment TEXT,
+            status VARCHAR(20) DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX (master_name),
+            INDEX (status)
+        )");
+    } catch (Exception $e) {}
+    try { $pdo->exec("ALTER TABLE reports ADD COLUMN status VARCHAR(20) DEFAULT 'pending'"); } catch (Exception $e) {}
+
     // Безопасное авто-добавление колонок при первом подключении (если их ещё нет)
     try { $pdo->exec("ALTER TABLE users ADD COLUMN appointment_date DATE DEFAULT NULL"); } catch (Exception $e) {}
     try { $pdo->exec("ALTER TABLE users ADD COLUMN banner_url VARCHAR(500) DEFAULT NULL"); } catch (Exception $e) {}
     try { $pdo->exec("ALTER TABLE users ADD COLUMN avatar_url VARCHAR(500) DEFAULT NULL"); } catch (Exception $e) {}
     try { $pdo->exec("ALTER TABLE users ADD COLUMN discord_tag VARCHAR(100) DEFAULT NULL"); } catch (Exception $e) {}
+    try { $pdo->exec("ALTER TABLE users ADD COLUMN about_me TEXT DEFAULT NULL"); } catch (Exception $e) {}
+    try { $pdo->exec("ALTER TABLE users ADD COLUMN is_banned TINYINT(1) DEFAULT 0"); } catch (Exception $e) {}
 
     try {
         $pdo->exec("ALTER TABLE reattestations ADD COLUMN answers_json TEXT DEFAULT NULL");
