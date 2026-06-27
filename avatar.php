@@ -42,6 +42,13 @@ $resp = curl_exec($ch);
 $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 curl_close($ch);
 
+// ?debug=1 — показать что вернул Discord (для диагностики)
+if (isset($_GET['debug'])) {
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['http_code' => $http, 'response' => json_decode($resp, true) ?? $resp, 'token_present' => !empty($token), 'token_len' => strlen($token)], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+    exit;
+}
+
 if ($http === 200 && $resp) {
     $data = json_decode($resp, true);
     if (!empty($data['avatar'])) {
