@@ -10,14 +10,20 @@ function configValue($envName, $configKey, $default = '')
     return trim((string) ($appConfig[$configKey] ?? $default));
 }
 
-function getGoogleSheetCsvUrl($gid)
+function getGoogleSheetCsvUrl($gidOrName)
 {
     $sheetId = configValue('GOOGLE_SHEET_ID', 'google_sheet_id', '1w2r_C3R7kh5CDvlehOHOjd3DPnvCMBQ9SnXZnB6t754');
-    $url = "https://docs.google.com/spreadsheets/d/{$sheetId}/export?format=csv";
-    if ($gid !== null && $gid !== '') {
-        $url .= "&gid={$gid}";
+    // Если передано чисто числовое значение — это GID (привычный CSV-экспорт).
+    // Если передана строка с буквами — это имя листа, используем gviz (он находит по имени).
+    if ($gidOrName !== null && $gidOrName !== '') {
+        if (ctype_digit((string)$gidOrName)) {
+            return "https://docs.google.com/spreadsheets/d/{$sheetId}/export?format=csv&gid={$gidOrName}";
+        }
+        // Имя листа: gviz URL устойчив к смене GID
+        return "https://docs.google.com/spreadsheets/d/{$sheetId}/gviz/tq?tqx=out:csv&sheet=" . rawurlencode($gidOrName);
     }
-    return $url;
+    // Дефолт: первая вкладка
+    return "https://docs.google.com/spreadsheets/d/{$sheetId}/export?format=csv";
 }
 
 function loadCsvRows($url, $customCacheTime = 600) // Увеличили кэш до 10 минут по умолчанию
@@ -290,10 +296,13 @@ function getAppConfig() {
     return is_array($appConfig) ? $appConfig : [];
 }
 
-function getStaffCsvUrl($gid = '2053240546') {
+function getStaffCsvUrl($gidOrName = '2053240546') {
     $config = getAppConfig();
     $sheetId = $config['google_sheet_id'] ?? '1w2r_C3R7kh5CDvlehOHOjd3DPnvCMBQ9SnXZnB6t754';
-    return "https://docs.google.com/spreadsheets/d/{$sheetId}/export?format=csv&gid={$gid}";
+    if ($gidOrName !== null && $gidOrName !== '' && !ctype_digit((string)$gidOrName)) {
+        return "https://docs.google.com/spreadsheets/d/{$sheetId}/gviz/tq?tqx=out:csv&sheet=" . rawurlencode($gidOrName);
+    }
+    return "https://docs.google.com/spreadsheets/d/{$sheetId}/export?format=csv&gid={$gidOrName}";
 }
 
 function fetchStaffRows($gid = '2053240546') {
