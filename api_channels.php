@@ -99,10 +99,11 @@ try {
                     $stmtUser->execute([$m['id']]);
                     $dbUser = $stmtUser->fetchColumn();
                     
+                    $tag = $dbUser ? $dbUser : $m['tag'];
                     $members[] = [
                         'id'     => $m['id'],
-                        'tag'    => $dbUser ? $dbUser : $m['tag'],
-                        'avatar' => $m['avatar'],
+                        'tag'    => $tag,
+                        'avatar' => 'avatar.php?id=' . urlencode($m['id']) . '&seed=' . urlencode($tag),
                         'since'  => date('Y-m-d H:i:s') // для живого бота ставим текущее время
                     ];
                 }
@@ -156,12 +157,8 @@ try {
     $result = [];
     foreach ($CHANNELS as $cid => $cname) {
         $members = array_map(function($s) {
-            $avatarUrl = 'https://cdn.discordapp.com/embed/avatars/0.png';
-            $numId = (float)$s['discord_id'];
-            if ($numId > 0) {
-                $avatarIdx = fmod($numId, 5);
-                $avatarUrl = "https://cdn.discordapp.com/embed/avatars/{$avatarIdx}.png";
-            }
+            // Реальная аватарка через наш прокси (avatar.php тянет с Discord API + кэшит)
+            $avatarUrl = 'avatar.php?id=' . urlencode($s['discord_id']) . '&seed=' . urlencode($s['display_name']);
             return [
                 'id'     => $s['discord_id'],
                 'tag'    => $s['display_name'],
