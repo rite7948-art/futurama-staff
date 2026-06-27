@@ -8,7 +8,7 @@ let config = {};
 try {
     config = require('./bot_config.json');
 } catch (e) {
-    console.warn("⚠️ Файл bot_config.json не найден. Бот будет использовать переменные окружения.");
+    console.warn("Файл bot_config.json не найден. Бот будет использовать переменные окружения.");
 }
 
 const TOKEN = process.env.DISCORD_TOKEN || config.token;
@@ -43,7 +43,7 @@ http.createServer(async (req, res) => {
     }
     res.end('Bot API');
 }).listen(AVATAR_PORT, () => {
-    console.log(`🤖 Сервер аватарок запущен на порту ${AVATAR_PORT}`);
+    console.log(`Сервер аватарок запущен на порту ${AVATAR_PORT}`);
 });
 
 const usersFile = path.join(__dirname, 'users.json');
@@ -118,7 +118,10 @@ const commands = [
 
 const { EmbedBuilder } = require('discord.js');
 
-const API_BASE_URL = process.env.API_BASE_URL || config.api_base_url || 'http://127.0.0.1:8000';
+let API_BASE_URL = process.env.SITE_URL || process.env.API_BASE_URL || config.api_base_url || 'http://127.0.0.1:8000';
+// Нормализация: добавляем https:// если забыли и убираем хвостовой слэш
+if (API_BASE_URL && !/^https?:\/\//i.test(API_BASE_URL)) API_BASE_URL = 'https://' + API_BASE_URL;
+API_BASE_URL = API_BASE_URL.replace(/\/+$/, '');
 const BOT_API_TOKEN = process.env.BOT_API_TOKEN || config.api_token || 'futika_bot_secret_2026';
 
 async function fetchUserProfile(discordId) {
@@ -156,7 +159,7 @@ function scheduleReconnect() {
 }
 
 client.on('ready', async () => {
-    console.log(`✅ Бот запущен как ${client.user.tag}`);
+    console.log(`Бот запущен как ${client.user.tag}`);
     try {
         console.log('Мгновенная регистрация команд для серверов...');
         const guilds = await client.guilds.fetch();
@@ -186,7 +189,7 @@ client.on('interactionCreate', async interaction => {
 
             if (!panelRole) {
                 return await interaction.editReply({
-                    content: '❌ **Доступ запрещен!**\nУ вас нет необходимых ролей персонала (Мастер, Куратор, Гл. Куратор или Администратор) на этом сервере.'
+                    content: '**Доступ запрещен.**\nУ вас нет необходимых ролей персонала (Мастер, Куратор, Гл. Куратор или Администратор) на этом сервере.'
                 });
             }
 
@@ -226,7 +229,7 @@ client.on('interactionCreate', async interaction => {
             saveUsers(users);
 
             await interaction.editReply({
-                content: `✅ Доступ создан!\n\n**Логин:** \`${login}\`\n**Пароль:** \`${password}\`\n**Роль:** \`${panelRole}\`\nСсылка: <${API_BASE_URL}>`
+                content: `**Доступ создан.**\n\n**Логин:** \`${login}\`\n**Пароль:** \`${password}\`\n**Роль:** \`${panelRole}\`\n**Ссылка:** <${API_BASE_URL}>`
             });
         } catch (error) {
             console.error('Ошибка /get_access:', error);
@@ -241,7 +244,7 @@ client.on('interactionCreate', async interaction => {
 
             if (!data || !data.success) {
                 return await interaction.editReply({
-                    content: '❌ **Профиль не найден!**\nСначала получите доступ к панели командой `/get_access`.'
+                    content: '**Профиль не найден.**\nСначала получите доступ к панели командой `/get_access`.'
                 });
             }
 
@@ -261,19 +264,19 @@ client.on('interactionCreate', async interaction => {
 
             const stats = data.stats || { total: 0, approved: 0, rejected: 0, pending: 0 };
             const weeklyCount = data.weekly_approved || 0;
-            const quotaStatus = weeklyCount >= 10 ? '✅ Выполнена' : `⏳ В процессе (${weeklyCount}/10)`;
+            const quotaStatus = weeklyCount >= 10 ? 'Выполнена' : `В процессе (${weeklyCount}/10)`;
 
             const embed = new EmbedBuilder()
-                .setTitle(`👤 Профиль: ${data.username}`)
+                .setTitle(`Профиль: ${data.username}`)
                 .setColor(roleColors[data.role] || 0xAAAAAA)
                 .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
                 .addFields(
-                    { name: '🔖 Роль', value: `\`${roleNames[data.role] || data.role}\``, inline: true },
-                    { name: '🆔 Discord ID', value: `\`${interaction.user.id}\``, inline: true },
+                    { name: 'Роль', value: `\`${roleNames[data.role] || data.role}\``, inline: true },
+                    { name: 'Discord ID', value: `\`${interaction.user.id}\``, inline: true },
                     { name: '\u200B', value: '\u200B', inline: false },
-                    { name: '📊 Статистика', value: [
-                        `✅ Одобрено саппортов: **${data.stats?.approved || 0}**`,
-                        `📋 Переаттестаций: **${data.stats?.reattestations || 0}**`
+                    { name: 'Статистика', value: [
+                        `Одобрено саппортов: **${data.stats?.approved || 0}**`,
+                        `Переаттестаций: **${data.stats?.reattestations || 0}**`
                     ].join('\n'), inline: true }
                 )
                 .setFooter({ text: 'Futurama Staff System', iconURL: client.user.displayAvatarURL() })
