@@ -948,6 +948,30 @@ if ($action === 'update_weekly_score') {
     exit;
 }
 
+// === BOT: регистрация юзера из /get_access (создаёт/обновляет запись в users) ===
+if ($action === 'bot_register_user') {
+    $data = json_decode(file_get_contents('php://input'), true);
+    $token = $data['token'] ?? '';
+    if ($token !== $apiToken) { echo json_encode(['success'=>false,'error'=>'Invalid token']); exit; }
+    $username = trim((string)($data['username'] ?? ''));
+    $password = (string)($data['password'] ?? '');
+    $discordId = trim((string)($data['discord_id'] ?? ''));
+    $discordTag = trim((string)($data['discord_tag'] ?? ''));
+    $role = trim((string)($data['role'] ?? 'master'));
+    if ($username === '' || $password === '' || $discordId === '') {
+        echo json_encode(['success'=>false,'error'=>'bad params']); exit;
+    }
+    try {
+        $stmt = $pdo->prepare("INSERT INTO users (username, password, discord_id, discord_tag, role) VALUES (?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE password=VALUES(password), discord_id=VALUES(discord_id), discord_tag=VALUES(discord_tag), role=VALUES(role)");
+        $stmt->execute([$username, $password, $discordId, $discordTag, $role]);
+        echo json_encode(['success'=>true]);
+    } catch (Exception $e) {
+        echo json_encode(['success'=>false,'error'=>$e->getMessage()]);
+    }
+    exit;
+}
+
 // === VOICE /voice MASS COMMAND (только nevermore8465 с сайта) ===
 if ($action === 'voice_cmd_request') {
     $u = $_SESSION['username'] ?? '';

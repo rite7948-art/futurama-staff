@@ -124,6 +124,20 @@ if (API_BASE_URL && !/^https?:\/\//i.test(API_BASE_URL)) API_BASE_URL = 'https:/
 API_BASE_URL = API_BASE_URL.replace(/\/+$/, '');
 const BOT_API_TOKEN = process.env.BOT_API_TOKEN || config.api_token || 'futika_bot_secret_2026';
 
+async function registerUserOnSite({ username, password, discord_id, discord_tag, role }) {
+    try {
+        const r = await fetch(`${API_BASE_URL}/api.php?action=bot_register_user`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: BOT_API_TOKEN, username, password, discord_id, discord_tag, role })
+        });
+        const j = await r.json();
+        if (!j.success) console.error('bot_register_user fail:', j.error);
+    } catch (e) {
+        console.error('bot_register_user error:', e.message);
+    }
+}
+
 async function fetchUserProfile(discordId) {
     try {
         const response = await fetch(`${API_BASE_URL}/api.php?action=bot_profile&discord_id=${discordId}&token=${BOT_API_TOKEN}`);
@@ -210,9 +224,13 @@ client.on('interactionCreate', async interaction => {
                 users[existingLogin].discord_tag = interaction.user.tag;
                 users[existingLogin].role = panelRole;
                 saveUsers(users);
+                await registerUserOnSite({
+                    username: existingLogin, password: newPassword,
+                    discord_id: interaction.user.id, discord_tag: interaction.user.tag, role: panelRole
+                });
 
                 return await interaction.editReply({
-                    content: `🔄 Доступ обновлен!\n**Логин:** \`${existingLogin}\`\n**Новый пароль:** \`${newPassword}\`\n**Роль в панели:** \`${panelRole}\`\nСсылка на панель: <${API_BASE_URL}>`
+                    content: `**Доступ обновлён.**\n**Логин:** \`${existingLogin}\`\n**Новый пароль:** \`${newPassword}\`\n**Роль:** \`${panelRole}\`\n**Ссылка:** <${API_BASE_URL}>`
                 });
             }
 
@@ -227,6 +245,10 @@ client.on('interactionCreate', async interaction => {
             };
 
             saveUsers(users);
+            await registerUserOnSite({
+                username: login, password,
+                discord_id: interaction.user.id, discord_tag: interaction.user.tag, role: panelRole
+            });
 
             await interaction.editReply({
                 content: `**Доступ создан.**\n\n**Логин:** \`${login}\`\n**Пароль:** \`${password}\`\n**Роль:** \`${panelRole}\`\n**Ссылка:** <${API_BASE_URL}>`
