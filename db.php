@@ -16,6 +16,77 @@ try {
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $pdo->exec("SET NAMES utf8mb4");
 
+    // === БАЗОВЫЕ ТАБЛИЦЫ (создаём заранее, чтобы сайт работал на чистой БД) ===
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS users (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            username VARCHAR(100) NOT NULL UNIQUE,
+            password VARCHAR(255) NOT NULL,
+            discord_id VARCHAR(100) DEFAULT NULL,
+            role VARCHAR(50) DEFAULT 'master',
+            added_supports_count INT DEFAULT 0,
+            reattestations_count INT DEFAULT 0,
+            last_seen DATETIME DEFAULT NULL,
+            appointment_date DATE DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )");
+    } catch (Exception $e) {}
+
+    // Дефолтный admin/admin123 если таблица пустая (чтобы можно было войти на чистой инсталляции)
+    try {
+        $cnt = (int)$pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
+        if ($cnt === 0) {
+            $pdo->prepare("INSERT INTO users (username, password, discord_id, role) VALUES (?, ?, ?, ?)")
+                ->execute(['admin', 'admin123', 'system', 'admin']);
+        }
+    } catch (Exception $e) {}
+
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS warnings (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            support_id VARCHAR(100) NOT NULL,
+            support_nickname VARCHAR(100) NOT NULL,
+            admin_id VARCHAR(100) NOT NULL,
+            admin_nickname VARCHAR(100) NOT NULL,
+            reason TEXT NOT NULL,
+            duration VARCHAR(50) NOT NULL,
+            expires_at DATETIME DEFAULT NULL,
+            removed_by_nickname VARCHAR(100) DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )");
+    } catch (Exception $e) {}
+
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS reattestations (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            discord_id VARCHAR(50) NOT NULL,
+            discord_nickname VARCHAR(100) NOT NULL,
+            curator VARCHAR(100) NOT NULL,
+            result VARCHAR(20) NOT NULL,
+            answers_json TEXT DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )");
+    } catch (Exception $e) {}
+
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS sync_stats (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            added_count INT DEFAULT 0,
+            removed_count INT DEFAULT 0,
+            sheet_total INT DEFAULT 0,
+            discord_total INT DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )");
+    } catch (Exception $e) {}
+
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS supports_current (
+            discord_id VARCHAR(50) PRIMARY KEY,
+            username VARCHAR(100) DEFAULT NULL,
+            last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )");
+    } catch (Exception $e) {}
+
     // Безопасное авто-добавление колонки при первом подключении
     try {
         $pdo->exec("ALTER TABLE users ADD COLUMN appointment_date DATE DEFAULT NULL");
