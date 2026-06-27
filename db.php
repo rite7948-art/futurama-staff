@@ -87,10 +87,11 @@ try {
         )");
     } catch (Exception $e) {}
 
-    // Безопасное авто-добавление колонки при первом подключении
-    try {
-        $pdo->exec("ALTER TABLE users ADD COLUMN appointment_date DATE DEFAULT NULL");
-    } catch (Exception $e) {}
+    // Безопасное авто-добавление колонок при первом подключении (если их ещё нет)
+    try { $pdo->exec("ALTER TABLE users ADD COLUMN appointment_date DATE DEFAULT NULL"); } catch (Exception $e) {}
+    try { $pdo->exec("ALTER TABLE users ADD COLUMN banner_url VARCHAR(500) DEFAULT NULL"); } catch (Exception $e) {}
+    try { $pdo->exec("ALTER TABLE users ADD COLUMN avatar_url VARCHAR(500) DEFAULT NULL"); } catch (Exception $e) {}
+    try { $pdo->exec("ALTER TABLE users ADD COLUMN discord_tag VARCHAR(100) DEFAULT NULL"); } catch (Exception $e) {}
 
     try {
         $pdo->exec("ALTER TABLE reattestations ADD COLUMN answers_json TEXT DEFAULT NULL");
