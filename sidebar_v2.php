@@ -191,33 +191,47 @@ try {
 
 <script>
     // === ПЕРЕСТАНОВКА ПУНКТОВ САЙДБАРА ПО НАСТРОЙКЕ ИЗ localStorage ===
-    // Каждая секция (ОСНОВНОЕ/УПРАВЛЕНИЕ/...) хранит порядок отдельно.
-    // Ключ: 'sidebar_order_<метка_секции>', значение: массив href-ов в нужном порядке.
+    // Пункты можно переносить между секциями. Каждая секция хранит свой список href-ов.
+    // Ключ: 'sidebar_order_<метка_секции>'. Если пункт указан в чужой секции — он туда и переедет.
     (function reorderSidebar() {
         try {
-            const sections = document.querySelectorAll('.nav-section');
+            const sections = Array.from(document.querySelectorAll('.nav-section'));
+            if (!sections.length) return;
+
+            // Карта: href → { li, originalSectionLabel }
+            const byHref = new Map();
+            sections.forEach(sec => {
+                const label = sec.querySelector('.nav-label')?.textContent?.trim() || '';
+                sec.querySelectorAll('.nav-menu > .nav-item').forEach(li => {
+                    const a = li.querySelector('a.nav-link');
+                    if (a) byHref.set(a.getAttribute('href'), { li, originalLabel: label });
+                });
+            });
+
+            const placed = new Set();
+
+            // Сначала проходим по сохранённым порядкам каждой секции
             sections.forEach(sec => {
                 const label = sec.querySelector('.nav-label')?.textContent?.trim() || '';
                 const menu = sec.querySelector('.nav-menu');
                 if (!menu) return;
-                const key = 'sidebar_order_' + label;
-                const saved = JSON.parse(localStorage.getItem(key) || '[]');
-                if (!saved.length) return;
-
-                const items = Array.from(menu.children);
-                // Карта href → li элемент
-                const byHref = new Map();
-                items.forEach(li => {
-                    const a = li.querySelector('a.nav-link');
-                    if (a) byHref.set(a.getAttribute('href'), li);
-                });
-                // Сначала те что в сохранённом порядке
+                const saved = JSON.parse(localStorage.getItem('sidebar_order_' + label) || '[]');
                 saved.forEach(href => {
-                    const li = byHref.get(href);
-                    if (li) { menu.appendChild(li); byHref.delete(href); }
+                    const rec = byHref.get(href);
+                    if (rec && !placed.has(href)) {
+                        menu.appendChild(rec.li); // перенос (даже если в другой секции)
+                        placed.add(href);
+                    }
                 });
-                // Остальные (новые пункты, которых ещё нет в saved) — в конец
-                byHref.forEach(li => menu.appendChild(li));
+            });
+
+            // Остальные пункты (новые/не сохранённые) — в их исходную секцию, в конец
+            byHref.forEach((rec, href) => {
+                if (placed.has(href)) return;
+                const target = sections.find(sec => (sec.querySelector('.nav-label')?.textContent?.trim() || '') === rec.originalLabel);
+                if (target) {
+                    target.querySelector('.nav-menu')?.appendChild(rec.li);
+                }
             });
         } catch (e) { console.warn('Sidebar reorder skipped:', e); }
     })();

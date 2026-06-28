@@ -638,7 +638,7 @@ require_once 'user_header.php';
                 if (!items.length) return;
                 html += `<div class="menu-sort-section" data-section="${label.replace(/"/g,'')}" style="margin-bottom:1.2rem;">`;
                 html += `<div style="font-size:0.7rem;font-weight:800;letter-spacing:0.08em;color:#888;text-transform:uppercase;margin:0 0 0.5rem 0;">${label}</div>`;
-                html += `<ul class="menu-sort-list" style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px;">`;
+                html += `<ul class="menu-sort-list" style="list-style:none;padding:6px;margin:0;display:flex;flex-direction:column;gap:6px;min-height:48px;border:1px dashed rgba(255,255,255,0.06);border-radius:8px;">`;
                 items.forEach(li => {
                     const a = li.querySelector('a.nav-link');
                     if (!a) return;
@@ -657,43 +657,60 @@ require_once 'user_header.php';
             attachDragHandlers();
         }
 
+        let _dragEl = null;
+
         function attachDragHandlers() {
-            document.querySelectorAll('.menu-sort-list').forEach(list => {
-                let dragEl = null;
+            const lists = document.querySelectorAll('.menu-sort-list');
+            lists.forEach(list => {
+                // Drop в пустую область списка (низ секции, без целевого item)
+                list.addEventListener('dragover', e => {
+                    e.preventDefault();
+                    if (!_dragEl) return;
+                    // Если курсор ниже последнего элемента — добавляем в конец
+                    const items = Array.from(list.querySelectorAll('.menu-sort-item'));
+                    const last = items[items.length - 1];
+                    if (!last || e.clientY > last.getBoundingClientRect().bottom) {
+                        list.appendChild(_dragEl);
+                    }
+                });
+                list.addEventListener('drop', e => e.preventDefault());
+
                 list.querySelectorAll('.menu-sort-item').forEach(item => {
                     item.addEventListener('dragstart', e => {
-                        dragEl = item;
+                        _dragEl = item;
                         item.style.opacity = '0.4';
                         e.dataTransfer.effectAllowed = 'move';
                     });
                     item.addEventListener('dragend', () => {
-                        item.style.opacity = '';
-                        dragEl = null;
-                        saveMenuOrder(list);
+                        if (_dragEl) _dragEl.style.opacity = '';
+                        _dragEl = null;
+                        saveAllMenuOrders();
                     });
                     item.addEventListener('dragover', e => {
                         e.preventDefault();
-                        if (!dragEl || dragEl === item) return;
+                        if (!_dragEl || _dragEl === item) return;
                         const rect = item.getBoundingClientRect();
                         const after = (e.clientY - rect.top) > rect.height / 2;
-                        if (after) item.parentNode.insertBefore(dragEl, item.nextSibling);
-                        else item.parentNode.insertBefore(dragEl, item);
+                        if (after) item.parentNode.insertBefore(_dragEl, item.nextSibling);
+                        else item.parentNode.insertBefore(_dragEl, item);
                     });
                 });
             });
         }
 
-        function saveMenuOrder(list) {
-            const section = list.closest('.menu-sort-section')?.dataset.section;
-            if (!section) return;
-            const order = Array.from(list.querySelectorAll('.menu-sort-item')).map(i => i.dataset.href);
-            localStorage.setItem('sidebar_order_' + section, JSON.stringify(order));
+        function saveAllMenuOrders() {
+            // Сохраняем все секции сразу — при переносе между секциями меняются обе
+            document.querySelectorAll('.menu-sort-section').forEach(sec => {
+                const section = sec.dataset.section;
+                const order = Array.from(sec.querySelectorAll('.menu-sort-item')).map(i => i.dataset.href);
+                localStorage.setItem('sidebar_order_' + section, JSON.stringify(order));
+            });
             // Мини-уведомление
             const toast = document.createElement('div');
             toast.textContent = 'Порядок сохранён. Обнови страницу — он применится.';
             toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#10b981;color:#fff;padding:10px 18px;border-radius:10px;font-weight:600;z-index:9999;box-shadow:0 6px 24px rgba(0,0,0,0.4);';
             document.body.appendChild(toast);
-            setTimeout(() => toast.remove(), 2500);
+            setTimeout(() => toast.remove(), 2200);
         }
 
         function resetMenuOrder() {
