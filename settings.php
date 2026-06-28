@@ -154,6 +154,7 @@ require_once 'user_header.php';
                     <button class="stab" data-t="fonts" onclick="showTab('fonts')"><i class="fas fa-font"></i> <span>Шрифт</span></button>
                     <button class="stab" data-t="effects" onclick="showTab('effects')"><i class="fas fa-wand-magic-sparkles"></i> <span>Эффекты</span></button>
                     <button class="stab" data-t="wallpaper" onclick="showTab('wallpaper')"><i class="fas fa-image"></i> <span>Обои</span></button>
+                    <button class="stab" data-t="menu" onclick="showTab('menu')"><i class="fas fa-bars"></i> <span>Меню</span></button>
                     <button onclick="resetAllSettings()" title="Сбросить все настройки оформления"
                         style="margin-left:auto; display:inline-flex; align-items:center; gap:8px; padding:11px 18px; border-radius:11px; border:1px solid rgba(239,68,68,0.3); background:rgba(239,68,68,0.1); color:#F87171; font-weight:700; font-size:0.9rem; cursor:pointer; transition:all 0.2s;"
                         onmouseover="this.style.background='rgba(239,68,68,0.2)'" onmouseout="this.style.background='rgba(239,68,68,0.1)'">
@@ -275,6 +276,23 @@ require_once 'user_header.php';
                             <button class="profile-mini-btn" onclick="clearWallpaper()" style="height:46px; font-weight:700;">Убрать обои</button>
                             <span style="color:var(--text-muted); font-size:0.85rem;"><i class="fas fa-paste"></i> или вставь картинку через Ctrl + V</span>
                             <span id="wallpaperStatus" style="color:var(--text-muted); font-size:0.85rem;"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card glass settings-panel" id="panel-menu" style="display:none;">
+                    <div class="card-header">
+                        <h3>Порядок вкладок сайдбара</h3>
+                    </div>
+                    <div class="card-body">
+                        <p style="margin:0 0 1rem; color:var(--text-muted); font-size:0.9rem;">
+                            Перетаскивай пункты, чтобы поменять порядок в боковом меню. Сохраняется автоматически.
+                        </p>
+                        <div id="menuSortRoot"></div>
+                        <div style="margin-top:1rem; display:flex; gap:10px;">
+                            <button class="profile-mini-btn" onclick="resetMenuOrder()" style="height:42px;">
+                                <i class="fas fa-rotate-left"></i> Сбросить порядок
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -602,7 +620,87 @@ require_once 'user_header.php';
                 if (isPreset) highlightWpPreset(savedWp);
                 document.getElementById('wallpaperStatus').textContent = 'Обои установлены';
             }
+
+            renderMenuSort();
         });
+
+        // === Меню: drag-and-drop порядка сайдбара ===
+        function renderMenuSort() {
+            const root = document.getElementById('menuSortRoot');
+            if (!root) return;
+            const realSidebar = document.querySelector('.sidebar') || document.querySelector('aside.sidebar') || document.getElementById('mainSidebar');
+            if (!realSidebar) { root.innerHTML = '<em>Не нашёл сайдбар</em>'; return; }
+            const sections = realSidebar.querySelectorAll('.nav-section');
+            let html = '';
+            sections.forEach(sec => {
+                const label = sec.querySelector('.nav-label')?.textContent?.trim() || 'Раздел';
+                const items = Array.from(sec.querySelectorAll('.nav-menu .nav-item'));
+                if (!items.length) return;
+                html += `<div class="menu-sort-section" data-section="${label.replace(/"/g,'')}" style="margin-bottom:1.2rem;">`;
+                html += `<div style="font-size:0.7rem;font-weight:800;letter-spacing:0.08em;color:#888;text-transform:uppercase;margin:0 0 0.5rem 0;">${label}</div>`;
+                html += `<ul class="menu-sort-list" style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px;">`;
+                items.forEach(li => {
+                    const a = li.querySelector('a.nav-link');
+                    if (!a) return;
+                    const href = a.getAttribute('href');
+                    const ic = a.querySelector('i')?.outerHTML || '';
+                    const name = a.querySelector('span')?.textContent || a.textContent.trim();
+                    html += `<li class="menu-sort-item" draggable="true" data-href="${href.replace(/"/g,'')}" `
+                          + `style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;`
+                          + `background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);cursor:grab;user-select:none;color:#fff;">`
+                          + `<i class="fas fa-grip-vertical" style="color:#666;font-size:0.85rem;"></i>`
+                          + `${ic} <span>${name}</span></li>`;
+                });
+                html += `</ul></div>`;
+            });
+            root.innerHTML = html || '<em>Сайдбар пуст</em>';
+            attachDragHandlers();
+        }
+
+        function attachDragHandlers() {
+            document.querySelectorAll('.menu-sort-list').forEach(list => {
+                let dragEl = null;
+                list.querySelectorAll('.menu-sort-item').forEach(item => {
+                    item.addEventListener('dragstart', e => {
+                        dragEl = item;
+                        item.style.opacity = '0.4';
+                        e.dataTransfer.effectAllowed = 'move';
+                    });
+                    item.addEventListener('dragend', () => {
+                        item.style.opacity = '';
+                        dragEl = null;
+                        saveMenuOrder(list);
+                    });
+                    item.addEventListener('dragover', e => {
+                        e.preventDefault();
+                        if (!dragEl || dragEl === item) return;
+                        const rect = item.getBoundingClientRect();
+                        const after = (e.clientY - rect.top) > rect.height / 2;
+                        if (after) item.parentNode.insertBefore(dragEl, item.nextSibling);
+                        else item.parentNode.insertBefore(dragEl, item);
+                    });
+                });
+            });
+        }
+
+        function saveMenuOrder(list) {
+            const section = list.closest('.menu-sort-section')?.dataset.section;
+            if (!section) return;
+            const order = Array.from(list.querySelectorAll('.menu-sort-item')).map(i => i.dataset.href);
+            localStorage.setItem('sidebar_order_' + section, JSON.stringify(order));
+            // Мини-уведомление
+            const toast = document.createElement('div');
+            toast.textContent = 'Порядок сохранён. Обнови страницу — он применится.';
+            toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#10b981;color:#fff;padding:10px 18px;border-radius:10px;font-weight:600;z-index:9999;box-shadow:0 6px 24px rgba(0,0,0,0.4);';
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 2500);
+        }
+
+        function resetMenuOrder() {
+            Object.keys(localStorage).filter(k => k.startsWith('sidebar_order_')).forEach(k => localStorage.removeItem(k));
+            alert('Порядок сброшен. Обнови страницу — вернётся стандартный.');
+            renderMenuSort();
+        }
 
         // Бургер меню
         const burgerBtn = document.getElementById('burgerBtn');

@@ -190,6 +190,38 @@ try {
 </aside>
 
 <script>
+    // === ПЕРЕСТАНОВКА ПУНКТОВ САЙДБАРА ПО НАСТРОЙКЕ ИЗ localStorage ===
+    // Каждая секция (ОСНОВНОЕ/УПРАВЛЕНИЕ/...) хранит порядок отдельно.
+    // Ключ: 'sidebar_order_<метка_секции>', значение: массив href-ов в нужном порядке.
+    (function reorderSidebar() {
+        try {
+            const sections = document.querySelectorAll('.nav-section');
+            sections.forEach(sec => {
+                const label = sec.querySelector('.nav-label')?.textContent?.trim() || '';
+                const menu = sec.querySelector('.nav-menu');
+                if (!menu) return;
+                const key = 'sidebar_order_' + label;
+                const saved = JSON.parse(localStorage.getItem(key) || '[]');
+                if (!saved.length) return;
+
+                const items = Array.from(menu.children);
+                // Карта href → li элемент
+                const byHref = new Map();
+                items.forEach(li => {
+                    const a = li.querySelector('a.nav-link');
+                    if (a) byHref.set(a.getAttribute('href'), li);
+                });
+                // Сначала те что в сохранённом порядке
+                saved.forEach(href => {
+                    const li = byHref.get(href);
+                    if (li) { menu.appendChild(li); byHref.delete(href); }
+                });
+                // Остальные (новые пункты, которых ещё нет в saved) — в конец
+                byHref.forEach(li => menu.appendChild(li));
+            });
+        } catch (e) { console.warn('Sidebar reorder skipped:', e); }
+    })();
+
     document.addEventListener('DOMContentLoaded', function() {
         const menuBtn = document.getElementById('mobileMenuBtn');
         const sidebar = document.getElementById('mainSidebar');
