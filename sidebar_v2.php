@@ -146,11 +146,13 @@ try {
                         <i class="fas fa-table"></i> <span>Таблица Google</span>
                     </a>
                 </li>
+                <?php if (in_array($_SESSION['role'] ?? 'master', ['admin', 'chief', 'curator'])): ?>
                 <li class="nav-item">
                     <a href="sync.php" class="nav-link <?= $currentPage === 'sync.php' ? 'active' : '' ?>">
                         <i class="fas fa-sync-alt"></i> <span>Сверка таблиц</span>
                     </a>
                 </li>
+                <?php endif; ?>
                 <li class="nav-item">
                     <a href="interview.php" class="nav-link <?= $currentPage === 'interview.php' ? 'active' : '' ?>">
                         <i class="fas fa-user-check"></i> <span>Собесник саппортов</span>
