@@ -66,7 +66,8 @@ require_once 'user_header.php';
 
         <div class="em-head">
             <input id="searchInput" class="em-search" placeholder="Поиск по нику / почте...">
-            <button class="em-btn primary" onclick="syncEmails()" title="Удалит почты тех, кого больше нет в Google-таблице"><i class="fa-solid fa-rotate"></i> Сверить с таблицей</button>
+            <button class="em-btn primary" onclick="notifyDiscord()" title="Пошлёт в Discord список тех, кого надо убрать"><i class="fa-brands fa-discord"></i> Уведомить в Discord</button>
+            <button class="em-btn" onclick="syncEmails()" title="Удалит почты тех, кого больше нет в Google-таблице"><i class="fa-solid fa-rotate"></i> Сверить с таблицей</button>
             <button class="em-btn" onclick="loadList()"><i class="fa-solid fa-arrows-rotate"></i> Обновить</button>
         </div>
 
@@ -150,6 +151,17 @@ async function saveRow(btn) {
         }
     } catch (e) { alert('Сеть: ' + e.message); }
     btn.disabled = false;
+}
+
+async function notifyDiscord() {
+    if (!confirm('Поставить в очередь Discord-уведомление со списком ников, которых нет в таблице?')) return;
+    try {
+        const r = await fetch('api.php?action=emails_notify_orphans', { method: 'POST' });
+        const j = await r.json();
+        if (!j.success) { alert('Ошибка: ' + (j.error||'?')); return; }
+        if (!j.queued) { alert(j.message || 'Все совпадает с таблицей — никого удалять не нужно.'); return; }
+        alert(`Уведомление поставлено в очередь.\nНикнеймов на удаление: ${j.count}.\n\nБот заберёт его в течение 30 секунд и пришлёт в Discord.`);
+    } catch (e) { alert('Сеть: ' + e.message); }
 }
 
 async function syncEmails() {

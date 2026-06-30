@@ -143,6 +143,23 @@ try {
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         )");
     } catch (Exception $e) {}
+
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS bot_notifications (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            type VARCHAR(50) NOT NULL,
+            channel_id VARCHAR(50) DEFAULT NULL,
+            mention_user_id VARCHAR(50) DEFAULT NULL,
+            payload TEXT NOT NULL,
+            status ENUM('pending','sent','failed') NOT NULL DEFAULT 'pending',
+            error TEXT DEFAULT NULL,
+            requested_by VARCHAR(100) DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            sent_at TIMESTAMP NULL,
+            INDEX (status),
+            INDEX (created_at)
+        )");
+    } catch (Exception $e) {}
     try { $pdo->exec("ALTER TABLE reports ADD COLUMN status VARCHAR(20) DEFAULT 'pending'"); } catch (Exception $e) {}
 
     // Безопасное авто-добавление колонок при первом подключении (если их ещё нет)

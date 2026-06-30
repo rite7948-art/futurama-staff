@@ -1081,6 +1081,82 @@ if ($action === 'emails_set') {
     exit;
 }
 
+if ($action === 'emails_notify_orphans') {
+    if (!isset($_SESSION['user_logged_in']) || !in_array($_SESSION['role'] ?? '', ['admin','chief'], true)) {
+        echo json_encode(['success'=>false,'error'=>'forbidden']); exit;
+    }
+    try {
+        // Считаем «orphan»-ов: есть в staff_emails, но нет в листе «Смены»
+        require_once 'staff_functions.php';
+        $rows = fetchStaffRows();
+        $sheetNicks = [];
+        foreach ($rows as $r) {
+            $nick = trim((string)($r[21] ?? ''));
+            if ($nick !== '' && $nick !== 'Никнейм') $sheetNicks[$nick] = true;
+        }
+        $orphans = [];
+        $stmt = $pdo->query("SELECT nickname, email FROM staff_emails");
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            if (!isset($sheetNicks[$row['nickname']])) $orphans[] = $row;
+        }
+        if (empty($orphans)) {
+            echo json_encode(['success'=>true,'queued'=>false,'message'=>'Нет лишних — всё совпадает с таблицей']);
+            exit;
+        }
+
+        // Кладём задачу в очередь — bot.js её пошлёт
+        $payload = json_encode(['orphans' => $orphans, 'count' => count($orphans)], JSON_UNESCAPED_UNICODE);
+        $channel = trim((string)($_POST['channel_id'] ?? $_GET['channel_id'] ?? ''));
+        $mention = trim((string)($_POST['mention_user_id'] ?? $_GET['mention_user_id'] ?? ''));
+        // если не передали — берём из env (для бота это будет в .env Railway)
+        $stmt = $pdo->prepare("INSERT INTO bot_notifications (type, channel_id, mention_user_id, payload, requested_by) VALUES (?, ?, ?, ?, ?)");
+        $stmt->execute([
+            'emails_orphans',
+            $channel ?: null,
+            $mention ?: null,
+            $payload,
+            (string)($_SESSION['username'] ?? 'system')
+        ]);
+        echo json_encode(['success'=>true,'queued'=>true,'count'=>count($orphans)]);
+    } catch (Exception $e) {
+        echo json_encode(['success'=>false,'error'=>$e->getMessage()]);
+    }
+    exit;
+}
+
+// === BOT: забрать очередь уведомлений (вызывается ботом по токену) ===
+if ($action === 'bot_notifications_poll') {
+    $token = $_GET['token'] ?? $_POST['token'] ?? '';
+    if ($token !== $apiToken) { echo json_encode(['success'=>false,'error'=>'Invalid token']); exit; }
+    try {
+        $rows = $pdo->query("SELECT * FROM bot_notifications WHERE status='pending' ORDER BY id ASC LIMIT 20")->fetchAll(PDO::FETCH_ASSOC);
+        echo json_encode(['success'=>true,'items'=>$rows]);
+    } catch (Exception $e) {
+        echo json_encode(['success'=>false,'error'=>$e->getMessage()]);
+    }
+    exit;
+}
+
+// === BOT: подтверждение отправки уведомления ===
+if ($action === 'bot_notifications_ack') {
+    $data = json_decode(file_get_contents('php://input'), true);
+    $token = $data['token'] ?? '';
+    if ($token !== $apiToken) { echo json_encode(['success'=>false,'error'=>'Invalid token']); exit; }
+    $id = (int)($data['id'] ?? 0);
+    $ok = !empty($data['ok']);
+    $err = (string)($data['error'] ?? '');
+    if (!$id) { echo json_encode(['success'=>false,'error'=>'no id']); exit; }
+    try {
+        $status = $ok ? 'sent' : 'failed';
+        $pdo->prepare("UPDATE bot_notifications SET status=?, sent_at=NOW(), error=? WHERE id=?")
+            ->execute([$status, $err ?: null, $id]);
+        echo json_encode(['success'=>true]);
+    } catch (Exception $e) {
+        echo json_encode(['success'=>false,'error'=>$e->getMessage()]);
+    }
+    exit;
+}
+
 if ($action === 'emails_sync') {
     if (!isset($_SESSION['user_logged_in']) || !in_array($_SESSION['role'] ?? '', ['admin','chief'], true)) {
         echo json_encode(['success'=>false,'error'=>'forbidden']); exit;

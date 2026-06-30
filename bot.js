@@ -149,6 +149,76 @@ async function fetchUserProfile(discordId) {
     }
 }
 
+// === ПОЛЛЕР УВЕДОМЛЕНИЙ ИЗ САЙТА ===
+const NOTIFY_CHANNEL_ID = process.env.NOTIFY_CHANNEL_ID || '';
+const NOTIFY_ADMIN_ID   = process.env.NOTIFY_ADMIN_ID   || '';
+
+async function ackNotification(id, ok, error) {
+    try {
+        await fetch(`${API_BASE_URL}/api.php?action=bot_notifications_ack`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: BOT_API_TOKEN, id, ok, error: error || '' })
+        });
+    } catch (e) { console.error('notify ack:', e.message); }
+}
+
+function buildOrphansMessage(payload, mentionId) {
+    const orphans = payload.orphans || [];
+    const mention = mentionId ? `<@${mentionId}>` : '';
+    let msg = `${mention} **Сверка почт стаффа** · ${orphans.length} лишн${orphans.length === 1 ? 'ий' : 'их'}\n`;
+    msg += 'Эти ники есть в базе сайта, но их **нет в листе «Смены»** — пора убрать:\n```\n';
+    orphans.forEach((o, i) => {
+        msg += `${i + 1}. ${o.nickname}${o.email ? '  ·  ' + o.email : ''}\n`;
+    });
+    msg += '```';
+    if (msg.length > 1900) msg = msg.slice(0, 1900) + '...\n```';
+    return msg.trim();
+}
+
+async function pollNotifications() {
+    if (!client.isReady || !client.isReady()) return;
+    try {
+        const r = await fetch(`${API_BASE_URL}/api.php?action=bot_notifications_poll&token=${BOT_API_TOKEN}`);
+        const j = await r.json();
+        if (!j.success || !Array.isArray(j.items) || !j.items.length) return;
+
+        for (const item of j.items) {
+            try {
+                const payload = JSON.parse(item.payload || '{}');
+                const channelId = item.channel_id || NOTIFY_CHANNEL_ID;
+                const mentionId = item.mention_user_id || NOTIFY_ADMIN_ID;
+                if (!channelId) {
+                    await ackNotification(item.id, false, 'NOTIFY_CHANNEL_ID не задан');
+                    continue;
+                }
+
+                let content = '';
+                if (item.type === 'emails_orphans') {
+                    content = buildOrphansMessage(payload, mentionId);
+                } else {
+                    content = (mentionId ? `<@${mentionId}> ` : '') + (payload.message || '(пустое уведомление)');
+                }
+
+                const channel = await client.channels.fetch(channelId).catch(() => null);
+                if (!channel) {
+                    await ackNotification(item.id, false, `Канал ${channelId} не найден`);
+                    continue;
+                }
+                await channel.send({ content, allowedMentions: { users: mentionId ? [mentionId] : [] } });
+                await ackNotification(item.id, true);
+                console.log(`[NOTIFY] #${item.id} ${item.type} отправлено в ${channelId}`);
+            } catch (err) {
+                console.error(`[NOTIFY] #${item.id} ошибка:`, err.message);
+                await ackNotification(item.id, false, err.message);
+            }
+        }
+    } catch (e) {
+        console.error('[NOTIFY] poll error:', e.message);
+    }
+}
+
+setInterval(pollNotifications, 30_000); // каждые 30 сек
+
 const rest = new REST({ version: '10' }).setToken(TOKEN);
 
 async function startBot() {
