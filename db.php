@@ -101,6 +101,22 @@ try {
             INDEX (status)
         )");
     } catch (Exception $e) {}
+
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS qa_questions (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            asker_username VARCHAR(100) NOT NULL,
+            asker_discord_id VARCHAR(50) DEFAULT NULL,
+            question TEXT NOT NULL,
+            answer TEXT DEFAULT NULL,
+            answered_by VARCHAR(100) DEFAULT NULL,
+            status ENUM('pending','answered') NOT NULL DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            answered_at TIMESTAMP NULL,
+            INDEX (status),
+            INDEX (created_at)
+        )");
+    } catch (Exception $e) {}
     try { $pdo->exec("ALTER TABLE reports ADD COLUMN status VARCHAR(20) DEFAULT 'pending'"); } catch (Exception $e) {}
 
     // Безопасное авто-добавление колонок при первом подключении (если их ещё нет)

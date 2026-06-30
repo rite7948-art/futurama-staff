@@ -948,6 +948,80 @@ if ($action === 'update_weekly_score') {
     exit;
 }
 
+// === Q&A: список вопросов (видят все авторизованные) ===
+if ($action === 'qa_list') {
+    if (!isset($_SESSION['user_logged_in'])) { echo json_encode(['success'=>false,'error'=>'auth']); exit; }
+    try {
+        $stmt = $pdo->query("SELECT * FROM qa_questions ORDER BY status ASC, created_at DESC LIMIT 500");
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        echo json_encode(['success'=>true,'rows'=>$rows]);
+    } catch (Exception $e) {
+        echo json_encode(['success'=>false,'error'=>$e->getMessage()]);
+    }
+    exit;
+}
+
+// === Q&A: задать вопрос (любой авторизованный) ===
+if ($action === 'qa_ask') {
+    if (!isset($_SESSION['user_logged_in'])) { echo json_encode(['success'=>false,'error'=>'auth']); exit; }
+    $data = json_decode(file_get_contents('php://input'), true);
+    $q = trim((string)($data['question'] ?? ''));
+    if (mb_strlen($q) < 5) { echo json_encode(['success'=>false,'error'=>'Вопрос слишком короткий']); exit; }
+    if (mb_strlen($q) > 1000) $q = mb_substr($q, 0, 1000);
+    try {
+        $stmt = $pdo->prepare("INSERT INTO qa_questions (asker_username, asker_discord_id, question) VALUES (?, ?, ?)");
+        $stmt->execute([
+            (string)($_SESSION['username'] ?? 'аноним'),
+            (string)($_SESSION['discord_id'] ?? null),
+            $q
+        ]);
+        echo json_encode(['success'=>true, 'id'=>$pdo->lastInsertId()]);
+    } catch (Exception $e) {
+        echo json_encode(['success'=>false,'error'=>$e->getMessage()]);
+    }
+    exit;
+}
+
+// === Q&A: ответить (admin/chief/curator) ===
+if ($action === 'qa_answer') {
+    if (!isset($_SESSION['user_logged_in'])) { echo json_encode(['success'=>false,'error'=>'auth']); exit; }
+    $role = $_SESSION['role'] ?? '';
+    if (!in_array($role, ['admin','chief','curator'], true)) { echo json_encode(['success'=>false,'error'=>'forbidden']); exit; }
+    $data = json_decode(file_get_contents('php://input'), true);
+    $id = (int)($data['id'] ?? 0);
+    $answer = trim((string)($data['answer'] ?? ''));
+    if (!$id || mb_strlen($answer) < 2) { echo json_encode(['success'=>false,'error'=>'bad params']); exit; }
+    try {
+        $stmt = $pdo->prepare("UPDATE qa_questions SET answer=?, answered_by=?, status='answered', answered_at=NOW() WHERE id=?");
+        $stmt->execute([$answer, (string)($_SESSION['username'] ?? 'system'), $id]);
+        echo json_encode(['success'=>true]);
+    } catch (Exception $e) {
+        echo json_encode(['success'=>false,'error'=>$e->getMessage()]);
+    }
+    exit;
+}
+
+// === Q&A: удалить (admin/chief/curator или автор вопроса) ===
+if ($action === 'qa_delete') {
+    if (!isset($_SESSION['user_logged_in'])) { echo json_encode(['success'=>false,'error'=>'auth']); exit; }
+    $data = json_decode(file_get_contents('php://input'), true);
+    $id = (int)($data['id'] ?? 0);
+    if (!$id) { echo json_encode(['success'=>false,'error'=>'bad id']); exit; }
+    try {
+        $role = $_SESSION['role'] ?? '';
+        $isAdmin = in_array($role, ['admin','chief','curator'], true);
+        if ($isAdmin) {
+            $pdo->prepare("DELETE FROM qa_questions WHERE id=?")->execute([$id]);
+        } else {
+            $pdo->prepare("DELETE FROM qa_questions WHERE id=? AND asker_username=?")->execute([$id, (string)($_SESSION['username'] ?? '')]);
+        }
+        echo json_encode(['success'=>true]);
+    } catch (Exception $e) {
+        echo json_encode(['success'=>false,'error'=>$e->getMessage()]);
+    }
+    exit;
+}
+
 // === BOT: регистрация юзера из /get_access (создаёт/обновляет запись в users) ===
 if ($action === 'bot_register_user') {
     $data = json_decode(file_get_contents('php://input'), true);

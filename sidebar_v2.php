@@ -75,6 +75,11 @@ try {
                         <i class="fas fa-book"></i> <span>Памятка</span>
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a href="qa.php" class="nav-link <?= $currentPage === 'qa.php' ? 'active' : '' ?>">
+                        <i class="fas fa-circle-question"></i> <span>Ответы на вопросы</span>
+                    </a>
+                </li>
             </ul>
         </div>
 
