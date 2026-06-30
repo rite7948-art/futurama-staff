@@ -70,6 +70,11 @@ try {
                         <i class="fas fa-medal"></i> <span>Достижения</span>
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a href="master_guide.php" class="nav-link <?= $currentPage === 'master_guide.php' ? 'active' : '' ?>">
+                        <i class="fas fa-book"></i> <span>Памятка</span>
+                    </a>
+                </li>
             </ul>
         </div>
 

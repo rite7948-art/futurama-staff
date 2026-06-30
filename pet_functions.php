@@ -21,6 +21,7 @@ function petTypes()
         'frog'    => '🐸',
         'penguin' => '🐧',
         'lion'    => '🦁',
+        'tiger'   => '🐯',
         'dragon'  => '🐲',
         // герои Доты
         'pudge'          => dotaImg('pudge'),
