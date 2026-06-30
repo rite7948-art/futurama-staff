@@ -95,7 +95,6 @@ foreach ($rules as $r) {
     <div class="mg-wrap">
         <div class="mg-head">
             <h1><i class="fa-solid fa-book"></i> Памятка для мастеров</h1>
-            <div class="mg-sub">Быстрый поиск по правилам, наказаниям и срокам.</div>
         </div>
 
         <div class="mg-searchbox">
