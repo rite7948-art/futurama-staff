@@ -165,7 +165,7 @@ function render() {
     document.getElementById('cntAnswered').textContent = allRows.filter(r => r.status === 'answered').length;
 
     if (!rows.length) {
-        $list.innerHTML = '<div class="qa-empty">Вопросов нет. Будь первым — задай свой выше!</div>';
+        $list.innerHTML = '';
         return;
     }
 
