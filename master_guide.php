@@ -116,16 +116,55 @@ foreach ($rules as $r) {
     const $results = document.getElementById('results');
     const $meta = document.getElementById('meta');
 
+    // === Стоп-слова: не учитываются как ключевые ===
+    const STOPWORDS = new Set([
+        'и','в','во','на','с','со','к','ко','от','до','из','за','для','о','об','же','то','тот','эта','это','эти',
+        'я','мы','ты','вы','он','она','они','мне','меня','тебя','его','её','их','нам','вам','них','свой','свою','своя',
+        'не','ни','но','а','или','либо','что','чтобы','когда','где','куда','откуда','как','такой','такая','такие',
+        'быть','есть','был','была','были','если','можно','нельзя','надо','нужно','хочу','хочется',
+        'правило','правил','правила','раздел','пункт'
+    ]);
+
     function normalize(s) {
         return (s || '').toLowerCase().replace(/[ёе]/g, 'е').replace(/[^а-яa-z0-9\s]/gi, ' ').replace(/\s+/g, ' ').trim();
+    }
+
+    // Простой стеммер для русского + английского: отрезаем типичные окончания.
+    // Не идеально, но для поиска по совпадению/префиксу работает хорошо.
+    const RU_SUFFIXES = [
+        'ями','ями','иями','ыми','ими','ого','его','ому','ему','ыми','ыми','ться','тся',
+        'ами','ями','ами','ями','ные','ный','ная','ное','ние','ний','ает','ает','ает',
+        'ать','ять','ить','еть','уть','ыть','ешь','ишь','ете','ите','ют','ят','ем','им',
+        'ах','ях','ах','ях','ов','ев','ой','ей','ою','ею','ый','ий','ая','яя','ое','ее','ые','ие',
+        'ам','ям','ом','ем','а','я','ы','и','у','ю','о','е','ь'
+    ];
+    function stem(w) {
+        if (!w) return w;
+        // оставляем как есть слишком короткое
+        if (w.length <= 3) return w;
+        for (const s of RU_SUFFIXES) {
+            if (w.length > s.length + 2 && w.endsWith(s)) {
+                return w.slice(0, -s.length);
+            }
+        }
+        return w;
+    }
+
+    function tokenize(s) {
+        const norm = normalize(s);
+        return norm.split(' ')
+            .filter(t => t.length >= 3)
+            .filter(t => !STOPWORDS.has(t))
+            .map(t => stem(t));
     }
 
     function highlight(text, terms) {
         if (!text) return '';
         let out = String(text).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        // подсвечиваем слова по корню (префиксу) — чтобы окрасить и «мут», и «мута», и «мутить»
         terms.forEach(t => {
-            if (t.length < 2) return;
-            const re = new RegExp('(' + t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + ')', 'gi');
+            if (t.length < 3) return;
+            const re = new RegExp('(' + t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '[а-яa-z]{0,6})', 'gi');
             out = out.replace(re, '<span class="mg-hl">$1</span>');
         });
         return out;
@@ -133,32 +172,41 @@ foreach ($rules as $r) {
 
     function score(rule, query) {
         if (!query) return 0;
-        const q = normalize(query);
-        const tokens = q.split(' ').filter(t => t.length >= 2);
+        const tokens = tokenize(query);
         if (!tokens.length) return 0;
 
-        const blob = normalize([
-            rule.id, rule.title, rule.text,
-            (rule.notes || []).join(' '),
-            (rule.keywords || []).join(' '),
-            rule.section,
-            rule.punishment || ''
-        ].join(' '));
+        // Заранее распарсенные «стеммированные» слова всех полей правила
+        const fieldStems = {
+            id:      [rule.id.toLowerCase()],
+            title:   tokenize(rule.title),
+            text:    tokenize(rule.text),
+            notes:   tokenize((rule.notes || []).join(' ')),
+            keys:    tokenize((rule.keywords || []).join(' ')),
+            section: tokenize(rule.section || '')
+        };
+        // Сырые ключевые слова (для бонуса при точном совпадении ключа)
+        const rawKeywords = (rule.keywords || []).map(k => normalize(k));
 
         let sc = 0;
         tokens.forEach(t => {
-            const exact = (rule.keywords || []).some(k => normalize(k) === t);
-            if (exact) sc += 12;
-            const inTitle = normalize(rule.title).includes(t);
-            if (inTitle) sc += 6;
-            const inId = normalize(rule.id).includes(t);
-            if (inId) sc += 8;
-            const inBlob = blob.includes(t);
-            if (inBlob) sc += 2;
-            // частичное совпадение в ключевых словах
-            (rule.keywords || []).forEach(k => {
-                if (normalize(k).includes(t) && normalize(k) !== t) sc += 4;
-            });
+            // 1) точное совпадение по любому ключевому слову (после стемминга)
+            if (fieldStems.keys.some(k => k === t)) sc += 14;
+            // 2) частичное совпадение «корень есть в ключе» или наоборот
+            if (fieldStems.keys.some(k => k.startsWith(t) || t.startsWith(k))) sc += 6;
+            // 3) точное вхождение в сырое ключевое слово (для фраз вроде «8 саппортов»)
+            if (rawKeywords.some(k => k.includes(t))) sc += 4;
+            // 4) совпадение в заголовке
+            if (fieldStems.title.some(w => w === t)) sc += 8;
+            if (fieldStems.title.some(w => w.startsWith(t) || t.startsWith(w))) sc += 3;
+            // 5) совпадение в id (например «4.7»)
+            if (fieldStems.id.some(w => w.includes(t))) sc += 10;
+            // 6) совпадение в тексте/заметках
+            if (fieldStems.text.some(w => w === t)) sc += 4;
+            if (fieldStems.notes.some(w => w === t)) sc += 3;
+            if (fieldStems.text.some(w => w.startsWith(t) || t.startsWith(w))) sc += 2;
+            if (fieldStems.notes.some(w => w.startsWith(t) || t.startsWith(w))) sc += 1;
+            // 7) секция
+            if (fieldStems.section.some(w => w.startsWith(t) || t.startsWith(w))) sc += 1;
         });
         return sc;
     }
@@ -184,7 +232,7 @@ foreach ($rules as $r) {
 
     function render() {
         const q = $input.value.trim();
-        const tokens = normalize(q).split(' ').filter(t => t.length >= 2);
+        const tokens = tokenize(q);
 
         if (!q) {
             // Без запроса — показываем всё, сгруппировано
