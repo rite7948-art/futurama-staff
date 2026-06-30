@@ -314,7 +314,11 @@ function getStaffCsvUrl($gidOrName = '2053240546') {
     return "https://docs.google.com/spreadsheets/d/{$sheetId}/export?format=csv&gid={$gidOrName}";
 }
 
-function fetchStaffRows($gid = '2053240546') {
+function fetchStaffRows($gid = null) {
+    // Если gid не задан явно — берём из env/конфига (имя листа или числовой GID)
+    if ($gid === null || $gid === '') {
+        $gid = configValue('MAIN_SHEET_GID', 'main_sheet_gid', '2053240546');
+    }
     $url = getStaffCsvUrl($gid);
     $cacheDir = __DIR__ . '/cache';
     if (!is_dir($cacheDir)) @mkdir($cacheDir, 0777, true);
