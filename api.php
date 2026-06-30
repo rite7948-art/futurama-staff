@@ -948,6 +948,171 @@ if ($action === 'update_weekly_score') {
     exit;
 }
 
+// === ПОСЕЩАЕМОСТЬ: список визитов (только admin) ===
+if ($action === 'visits_list') {
+    if (!isset($_SESSION['user_logged_in']) || ($_SESSION['role'] ?? '') !== 'admin') {
+        echo json_encode(['success'=>false,'error'=>'forbidden']); exit;
+    }
+    try {
+        $limit = max(1, min(500, (int)($_GET['limit'] ?? 100)));
+        $userFilter = trim((string)($_GET['user'] ?? ''));
+        $pageFilter = trim((string)($_GET['page'] ?? ''));
+        $where = []; $params = [];
+        if ($userFilter !== '') { $where[] = 'username LIKE ?'; $params[] = '%'.$userFilter.'%'; }
+        if ($pageFilter !== '') { $where[] = 'page LIKE ?'; $params[] = '%'.$pageFilter.'%'; }
+        $sqlWhere = $where ? 'WHERE '.implode(' AND ', $where) : '';
+        $sql = "SELECT id, username, role, page, ip, visited_at FROM site_visits $sqlWhere ORDER BY id DESC LIMIT $limit";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Кто сейчас онлайн (был на сайте за последние 5 мин)
+        $online = $pdo->query("SELECT username, role, MAX(visited_at) AS last_seen FROM site_visits
+            WHERE visited_at >= DATE_SUB(NOW(), INTERVAL 5 MINUTE)
+            GROUP BY username, role ORDER BY last_seen DESC")->fetchAll(PDO::FETCH_ASSOC);
+
+        // Топ юзеров по количеству визитов за неделю
+        $topWeek = $pdo->query("SELECT username, COUNT(*) AS visits FROM site_visits
+            WHERE visited_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+            GROUP BY username ORDER BY visits DESC LIMIT 10")->fetchAll(PDO::FETCH_ASSOC);
+
+        // Сегодня
+        $today = (int)$pdo->query("SELECT COUNT(*) FROM site_visits WHERE DATE(visited_at) = CURDATE()")->fetchColumn();
+        $todayUsers = (int)$pdo->query("SELECT COUNT(DISTINCT username) FROM site_visits WHERE DATE(visited_at) = CURDATE()")->fetchColumn();
+
+        echo json_encode([
+            'success' => true,
+            'rows' => $rows,
+            'online' => $online,
+            'top_week' => $topWeek,
+            'today_visits' => $today,
+            'today_users' => $todayUsers
+        ]);
+    } catch (Exception $e) {
+        echo json_encode(['success'=>false,'error'=>$e->getMessage()]);
+    }
+    exit;
+}
+
+// === ПОЧТЫ СТАФФА: список + синхронизация с Google (chief/admin) ===
+if ($action === 'emails_list') {
+    if (!isset($_SESSION['user_logged_in']) || !in_array($_SESSION['role'] ?? '', ['admin','chief'], true)) {
+        echo json_encode(['success'=>false,'error'=>'forbidden']); exit;
+    }
+    try {
+        require_once 'staff_functions.php';
+        // Берём состав из листа «Смены» (колонки U=20 роль, V=21 ник, W=22 discord_id)
+        $rows = fetchStaffRows();
+        $sheetStaff = []; // nickname => ['discord_id'=>..., 'role'=>...]
+        foreach ($rows as $r) {
+            $role = trim((string)($r[20] ?? ''));
+            $nick = trim((string)($r[21] ?? ''));
+            $did  = preg_replace('/[^0-9]/', '', (string)($r[22] ?? ''));
+            if ($nick === '' || $nick === 'Никнейм') continue;
+            if ($role === '' || mb_stripos($nick, 'смена') !== false) continue;
+            // Только курирующий состав (куратор/гл.куратор/админ/помощник/мастер)
+            $rl = mb_strtolower($role);
+            if (mb_strpos($rl, 'куратор') !== false || mb_strpos($rl, 'админ') !== false
+                || mb_strpos($rl, 'мастер') !== false || mb_strpos($rl, 'помощник') !== false
+                || mb_strpos($rl, 'глк') !== false) {
+                $sheetStaff[$nick] = ['discord_id' => $did, 'role' => $role];
+            }
+        }
+
+        // Подтянем из БД сохранённые почты
+        $emails = [];
+        $stmt = $pdo->query("SELECT nickname, email, discord_id, note, updated_at FROM staff_emails");
+        while ($e = $stmt->fetch(PDO::FETCH_ASSOC)) $emails[$e['nickname']] = $e;
+
+        // Собираем итоговый список
+        $list = [];
+        foreach ($sheetStaff as $nick => $info) {
+            $em = $emails[$nick] ?? null;
+            $list[] = [
+                'nickname' => $nick,
+                'discord_id' => $info['discord_id'] ?: ($em['discord_id'] ?? ''),
+                'role' => $info['role'],
+                'email' => $em['email'] ?? '',
+                'note' => $em['note'] ?? '',
+                'updated_at' => $em['updated_at'] ?? null,
+                'in_sheet' => true
+            ];
+        }
+        // Те у кого почта есть в БД, но в таблице их уже нет
+        foreach ($emails as $nick => $em) {
+            if (!isset($sheetStaff[$nick])) {
+                $list[] = [
+                    'nickname' => $nick,
+                    'discord_id' => $em['discord_id'] ?? '',
+                    'role' => '',
+                    'email' => $em['email'] ?? '',
+                    'note' => $em['note'] ?? '',
+                    'updated_at' => $em['updated_at'] ?? null,
+                    'in_sheet' => false
+                ];
+            }
+        }
+        echo json_encode(['success'=>true,'rows'=>$list]);
+    } catch (Exception $e) {
+        echo json_encode(['success'=>false,'error'=>$e->getMessage()]);
+    }
+    exit;
+}
+
+if ($action === 'emails_set') {
+    if (!isset($_SESSION['user_logged_in']) || !in_array($_SESSION['role'] ?? '', ['admin','chief'], true)) {
+        echo json_encode(['success'=>false,'error'=>'forbidden']); exit;
+    }
+    $data = json_decode(file_get_contents('php://input'), true);
+    $nick = trim((string)($data['nickname'] ?? ''));
+    $email = trim((string)($data['email'] ?? ''));
+    $note = trim((string)($data['note'] ?? ''));
+    $did = preg_replace('/[^0-9]/', '', (string)($data['discord_id'] ?? ''));
+    if ($nick === '') { echo json_encode(['success'=>false,'error'=>'bad nick']); exit; }
+    if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) { echo json_encode(['success'=>false,'error'=>'bad email']); exit; }
+    try {
+        $stmt = $pdo->prepare("INSERT INTO staff_emails (nickname, discord_id, email, note) VALUES (?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE email = VALUES(email), discord_id = VALUES(discord_id), note = VALUES(note)");
+        $stmt->execute([$nick, $did ?: null, $email ?: null, $note ?: null]);
+        echo json_encode(['success'=>true]);
+    } catch (Exception $e) {
+        echo json_encode(['success'=>false,'error'=>$e->getMessage()]);
+    }
+    exit;
+}
+
+if ($action === 'emails_sync') {
+    if (!isset($_SESSION['user_logged_in']) || !in_array($_SESSION['role'] ?? '', ['admin','chief'], true)) {
+        echo json_encode(['success'=>false,'error'=>'forbidden']); exit;
+    }
+    try {
+        require_once 'staff_functions.php';
+        $rows = fetchStaffRows();
+        $sheetNicks = [];
+        foreach ($rows as $r) {
+            $role = trim((string)($r[20] ?? ''));
+            $nick = trim((string)($r[21] ?? ''));
+            if ($nick === '' || $nick === 'Никнейм') continue;
+            if ($role === '' || mb_stripos($nick, 'смена') !== false) continue;
+            $sheetNicks[$nick] = true;
+        }
+        if (empty($sheetNicks)) { echo json_encode(['success'=>false,'error'=>'Лист пустой']); exit; }
+
+        // Удаляем почты тех ников, кого нет в листе
+        $existing = $pdo->query("SELECT nickname FROM staff_emails")->fetchAll(PDO::FETCH_COLUMN);
+        $toDelete = array_filter($existing, fn($n) => !isset($sheetNicks[$n]));
+        $removed = [];
+        if ($toDelete) {
+            $del = $pdo->prepare("DELETE FROM staff_emails WHERE nickname = ?");
+            foreach ($toDelete as $n) { $del->execute([$n]); $removed[] = $n; }
+        }
+        echo json_encode(['success'=>true,'removed'=>$removed,'removed_count'=>count($removed)]);
+    } catch (Exception $e) {
+        echo json_encode(['success'=>false,'error'=>$e->getMessage()]);
+    }
+    exit;
+}
+
 // === Q&A: список вопросов (видят все авторизованные) ===
 if ($action === 'qa_list') {
     if (!isset($_SESSION['user_logged_in'])) { echo json_encode(['success'=>false,'error'=>'auth']); exit; }

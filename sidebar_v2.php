@@ -183,6 +183,18 @@ try {
                         <?php endif; ?>
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a href="visits.php" class="nav-link <?= $currentPage === 'visits.php' ? 'active' : '' ?>">
+                        <i class="fas fa-chart-line"></i> <span>Посещаемость</span>
+                    </a>
+                </li>
+                <?php endif; ?>
+                <?php if (in_array($_SESSION['role'] ?? 'master', ['admin','chief'], true)): ?>
+                <li class="nav-item">
+                    <a href="emails.php" class="nav-link <?= $currentPage === 'emails.php' ? 'active' : '' ?>">
+                        <i class="fas fa-envelope"></i> <span>Почты стаффа</span>
+                    </a>
+                </li>
                 <?php endif; ?>
                 <?php if (in_array($_SESSION['role'] ?? 'master', ['admin', 'chief', 'curator', 'master'])): ?>
                 <li class="nav-item">

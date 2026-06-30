@@ -117,6 +117,32 @@ try {
             INDEX (created_at)
         )");
     } catch (Exception $e) {}
+
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS site_visits (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            username VARCHAR(100) NOT NULL,
+            role VARCHAR(50) DEFAULT NULL,
+            page VARCHAR(200) NOT NULL,
+            ip VARCHAR(45) DEFAULT NULL,
+            user_agent VARCHAR(500) DEFAULT NULL,
+            visited_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX (username),
+            INDEX (visited_at)
+        )");
+    } catch (Exception $e) {}
+
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS staff_emails (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            nickname VARCHAR(100) NOT NULL UNIQUE,
+            discord_id VARCHAR(50) DEFAULT NULL,
+            email VARCHAR(255) DEFAULT NULL,
+            note VARCHAR(255) DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )");
+    } catch (Exception $e) {}
     try { $pdo->exec("ALTER TABLE reports ADD COLUMN status VARCHAR(20) DEFAULT 'pending'"); } catch (Exception $e) {}
 
     // Безопасное авто-добавление колонок при первом подключении (если их ещё нет)

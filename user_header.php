@@ -37,6 +37,26 @@ if (isset($_SESSION['username'])) {
             $stmtLastSeen->execute([$_SESSION['username']]);
         }
     } catch (Exception $e) {}
+
+    // Логируем посещение страницы (throttle: не чаще 1 раза в 60 сек на ту же страницу)
+    try {
+        $page = basename((string)($_SERVER['SCRIPT_NAME'] ?? ''));
+        if ($page && $page !== 'api.php' && $page !== 'api_channels.php' && $page !== 'avatar.php' && $page !== 'run_sync.php') {
+            $stmt = $pdo->prepare("SELECT visited_at FROM site_visits WHERE username = ? AND page = ? ORDER BY id DESC LIMIT 1");
+            $stmt->execute([$_SESSION['username'], $page]);
+            $last = $stmt->fetchColumn();
+            if (!$last || (time() - strtotime($last)) > 60) {
+                $stmtIns = $pdo->prepare("INSERT INTO site_visits (username, role, page, ip, user_agent) VALUES (?, ?, ?, ?, ?)");
+                $stmtIns->execute([
+                    $_SESSION['username'],
+                    $_SESSION['role'] ?? null,
+                    $page,
+                    $_SERVER['REMOTE_ADDR'] ?? null,
+                    substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 500)
+                ]);
+            }
+        }
+    } catch (Exception $e) {}
 }
 
 require_once 'staff_functions.php';
