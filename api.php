@@ -1099,13 +1099,41 @@ if ($action === 'emails_notify_orphans') {
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             if (!isset($sheetNicks[$row['nickname']])) $orphans[] = $row;
         }
-        if (empty($orphans)) {
-            echo json_encode(['success'=>true,'queued'=>false,'message'=>'Нет лишних — всё совпадает с таблицей']);
+
+        // Дополнительно — у кого есть почта, но нет доступа к таблице
+        $noAccess = [];
+        try {
+            $webhook = configValue('APP_SCRIPT_WEBHOOK_URL', 'app_script_webhook_url');
+            if ($webhook) {
+                $tokenA = configValue('APP_SCRIPT_WEBHOOK_TOKEN', 'app_script_webhook_token');
+                $ch = curl_init($webhook);
+                curl_setopt_array($ch, [
+                    CURLOPT_RETURNTRANSFER=>true, CURLOPT_POST=>true,
+                    CURLOPT_POSTFIELDS => json_encode(['token'=>$tokenA, 'action'=>'list_access']),
+                    CURLOPT_HTTPHEADER=>['Content-Type: application/json'],
+                    CURLOPT_FOLLOWLOCATION=>true, CURLOPT_SSL_VERIFYPEER=>false, CURLOPT_TIMEOUT=>10
+                ]);
+                $r2 = curl_exec($ch); curl_close($ch);
+                $d2 = json_decode((string)$r2, true);
+                if (!empty($d2['ok'])) {
+                    $accessSet = array_map('strtolower', array_map('trim', (array)($d2['all'] ?? [])));
+                    $s2 = $pdo->query("SELECT nickname, email FROM staff_emails WHERE email IS NOT NULL AND email <> ''");
+                    while ($row2 = $s2->fetch(PDO::FETCH_ASSOC)) {
+                        if (isset($sheetNicks[$row2['nickname']]) && !in_array(strtolower(trim($row2['email'])), $accessSet, true)) {
+                            $noAccess[] = $row2;
+                        }
+                    }
+                }
+            }
+        } catch (Exception $e) {}
+
+        if (empty($orphans) && empty($noAccess)) {
+            echo json_encode(['success'=>true,'queued'=>false,'message'=>'Всё чисто — никого убирать не надо и все с доступом']);
             exit;
         }
 
         // Кладём задачу в очередь — bot.js её пошлёт
-        $payload = json_encode(['orphans' => $orphans, 'count' => count($orphans)], JSON_UNESCAPED_UNICODE);
+        $payload = json_encode(['orphans' => $orphans, 'no_access' => $noAccess, 'count' => count($orphans) + count($noAccess)], JSON_UNESCAPED_UNICODE);
         $channel = trim((string)($_POST['channel_id'] ?? $_GET['channel_id'] ?? ''));
         $mention = trim((string)($_POST['mention_user_id'] ?? $_GET['mention_user_id'] ?? ''));
         // если не передали — берём из env (для бота это будет в .env Railway)
@@ -1151,6 +1179,66 @@ if ($action === 'bot_notifications_ack') {
         $pdo->prepare("UPDATE bot_notifications SET status=?, sent_at=NOW(), error=? WHERE id=?")
             ->execute([$status, $err ?: null, $id]);
         echo json_encode(['success'=>true]);
+    } catch (Exception $e) {
+        echo json_encode(['success'=>false,'error'=>$e->getMessage()]);
+    }
+    exit;
+}
+
+if ($action === 'emails_check_access') {
+    if (!isset($_SESSION['user_logged_in']) || !in_array($_SESSION['role'] ?? '', ['admin','chief'], true)) {
+        echo json_encode(['success'=>false,'error'=>'forbidden']); exit;
+    }
+    try {
+        $webhook = configValue('APP_SCRIPT_WEBHOOK_URL', 'app_script_webhook_url');
+        if (!$webhook) { echo json_encode(['success'=>false,'error'=>'Не задан app_script_webhook_url']); exit; }
+        $token = configValue('APP_SCRIPT_WEBHOOK_TOKEN', 'app_script_webhook_token');
+        $payload = ['token' => $token, 'action' => 'list_access'];
+
+        $ch = curl_init($webhook);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => json_encode($payload),
+            CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_TIMEOUT => 15,
+            CURLOPT_USERAGENT => 'Mozilla/5.0 (compatible; futurama-staff)'
+        ]);
+        $resp = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        $data = json_decode((string)$resp, true);
+        if (!$data || empty($data['ok'])) {
+            $err = $data['error'] ?? ("HTTP $httpCode. Ответ: " . substr((string)$resp, 0, 200));
+            echo json_encode(['success'=>false,'error'=>$err]); exit;
+        }
+
+        // Нормализуем список — все в нижнем регистре без лишних пробелов
+        $accessSet = array_map('strtolower', array_map('trim', (array)($data['all'] ?? [])));
+        $accessSet = array_values(array_filter($accessSet));
+
+        // Сравниваем с почтами из БД
+        $stmt = $pdo->query("SELECT nickname, email FROM staff_emails WHERE email IS NOT NULL AND email <> ''");
+        $result = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $em = strtolower(trim((string)$row['email']));
+            $result[$row['nickname']] = [
+                'email' => $row['email'],
+                'has_access' => $em !== '' && in_array($em, $accessSet, true)
+            ];
+        }
+
+        echo json_encode([
+            'success' => true,
+            'access_count' => count($accessSet),
+            'owner' => $data['owner'] ?? null,
+            'editors' => $data['editors'] ?? [],
+            'viewers' => $data['viewers'] ?? [],
+            'per_nick' => $result
+        ]);
     } catch (Exception $e) {
         echo json_encode(['success'=>false,'error'=>$e->getMessage()]);
     }

@@ -164,13 +164,26 @@ async function ackNotification(id, ok, error) {
 
 function buildOrphansMessage(payload, mentionId) {
     const orphans = payload.orphans || [];
+    const noAccess = payload.no_access || [];
     const mention = mentionId ? `<@${mentionId}>` : '';
-    let msg = `${mention} **Сверка почт стаффа** · ${orphans.length} лишн${orphans.length === 1 ? 'ий' : 'их'}\n`;
-    msg += 'Эти ники есть в базе сайта, но их **нет в листе «Смены»** — пора убрать:\n```\n';
-    orphans.forEach((o, i) => {
-        msg += `${i + 1}. ${o.nickname}${o.email ? '  ·  ' + o.email : ''}\n`;
-    });
-    msg += '```';
+    let msg = `${mention} **Сверка почт стаффа**\n`;
+
+    if (orphans.length) {
+        msg += `\n🗑 **Убрать (нет в листе «Смены»)** — ${orphans.length}:\n\`\`\`\n`;
+        orphans.forEach((o, i) => {
+            msg += `${i + 1}. ${o.nickname}${o.email ? '  ·  ' + o.email : ''}\n`;
+        });
+        msg += '```';
+    }
+    if (noAccess.length) {
+        msg += `\n\n🔒 **Нет доступа к таблице** — ${noAccess.length}:\n\`\`\`\n`;
+        noAccess.forEach((o, i) => {
+            msg += `${i + 1}. ${o.nickname}  ·  ${o.email}\n`;
+        });
+        msg += '```';
+    }
+    if (!orphans.length && !noAccess.length) msg += '\nВсё чисто — никого убирать не надо и все с доступом.';
+
     if (msg.length > 1900) msg = msg.slice(0, 1900) + '...\n```';
     return msg.trim();
 }

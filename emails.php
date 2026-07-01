@@ -66,7 +66,8 @@ require_once 'user_header.php';
 
         <div class="em-head">
             <input id="searchInput" class="em-search" placeholder="Поиск по нику / почте...">
-            <button class="em-btn primary" onclick="notifyDiscord()" title="Пошлёт в Discord список тех, кого надо убрать"><i class="fa-brands fa-discord"></i> Уведомить в Discord</button>
+            <button class="em-btn primary" onclick="checkAccess()" title="Проверит у кого из состава есть доступ к таблице по указанной почте"><i class="fa-solid fa-shield-halved"></i> Проверить доступы</button>
+            <button class="em-btn" onclick="notifyDiscord()" title="Пошлёт в Discord список тех, кого надо убрать"><i class="fa-brands fa-discord"></i> Уведомить в Discord</button>
             <button class="em-btn" onclick="syncEmails()" title="Удалит почты тех, кого больше нет в Google-таблице"><i class="fa-solid fa-rotate"></i> Сверить с таблицей</button>
             <button class="em-btn" onclick="loadList()"><i class="fa-solid fa-arrows-rotate"></i> Обновить</button>
         </div>
@@ -79,6 +80,7 @@ require_once 'user_header.php';
                         <th>Discord ID</th>
                         <th>Роль</th>
                         <th>Почта</th>
+                        <th>Доступ</th>
                         <th>Заметка</th>
                         <th></th>
                     </tr>
@@ -91,12 +93,21 @@ require_once 'user_header.php';
 
 <script>
 let allRows = [];
+let accessMap = {}; // nickname → { email, has_access }
+
+function accessBadge(r) {
+    if (!r.email) return '<span title="Нет почты — не могу проверить" style="color:#f59e0b;"><i class="fa-solid fa-triangle-exclamation"></i></span>';
+    const rec = accessMap[r.nickname];
+    if (!rec) return '<span title="Ещё не проверял. Нажми «Проверить доступы»" style="color:#666;"><i class="fa-regular fa-circle-question"></i></span>';
+    if (rec.has_access) return '<span title="Почта в списке доступов" style="color:#10b981; font-weight:700;"><i class="fa-solid fa-circle-check"></i> есть</span>';
+    return '<span title="Почта НЕ в списке доступов" style="color:#ef4444; font-weight:700;"><i class="fa-solid fa-circle-xmark"></i> нет</span>';
+}
 
 function render() {
     const q = document.getElementById('searchInput').value.toLowerCase().trim();
     const rows = allRows.filter(r => !q || (r.nickname||'').toLowerCase().includes(q) || (r.email||'').toLowerCase().includes(q));
     const $tbody = document.getElementById('emailsBody');
-    if (!rows.length) { $tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#888;">Ничего не найдено</td></tr>'; return; }
+    if (!rows.length) { $tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#888;">Ничего не найдено</td></tr>'; return; }
 
     $tbody.innerHTML = rows.map((r, i) => `
         <tr class="${r.in_sheet ? '' : 'orphan'}" data-nick="${(r.nickname||'').replace(/"/g,'&quot;')}">
@@ -104,6 +115,7 @@ function render() {
             <td><code style="color:#888; font-size:0.78rem">${r.discord_id || '—'}</code></td>
             <td>${r.role ? '<span class="em-pill">' + r.role + '</span>' : '—'}</td>
             <td><input class="em-input" type="email" placeholder="например: ivan@gmail.com" value="${(r.email||'').replace(/"/g,'&quot;')}" data-field="email"></td>
+            <td style="font-size:0.85rem; white-space:nowrap;">${accessBadge(r)}</td>
             <td><input class="em-input" placeholder="..." value="${(r.note||'').replace(/"/g,'&quot;')}" data-field="note"></td>
             <td><button class="em-btn primary" style="padding:0.35rem 0.7rem; font-size:0.78rem;" onclick="saveRow(this)"><i class="fa-solid fa-floppy-disk"></i></button></td>
         </tr>
@@ -151,6 +163,24 @@ async function saveRow(btn) {
         }
     } catch (e) { alert('Сеть: ' + e.message); }
     btn.disabled = false;
+}
+
+async function checkAccess() {
+    const btn = event.target.closest('button');
+    const html = btn.innerHTML;
+    btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Проверяю...';
+    try {
+        const r = await fetch('api.php?action=emails_check_access');
+        const j = await r.json();
+        if (!j.success) { alert('Ошибка: ' + (j.error||'?')); return; }
+        accessMap = j.per_nick || {};
+        // Сколько почт с доступом / без
+        const withAccess = Object.values(accessMap).filter(v => v.has_access).length;
+        const withoutAccess = Object.values(accessMap).filter(v => !v.has_access).length;
+        alert(`Всего доступов у таблицы: ${j.access_count}\n\nИз почт стаффа:\n✓ С доступом: ${withAccess}\n✗ Без доступа: ${withoutAccess}\n\nСмотри колонку «Доступ» в таблице.`);
+        render();
+    } catch (e) { alert('Сеть: ' + e.message); }
+    btn.disabled = false; btn.innerHTML = html;
 }
 
 async function notifyDiscord() {
